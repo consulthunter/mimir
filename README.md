@@ -25,8 +25,13 @@ Create a python 3.13+ virtual environment:
 `python -m venv venv`
 
 Activate the virtual environment and install the requirements:
-
-`source venv/bin/activate`
+- Windows
+  - CMD
+    - `venv\Scripts\activate.bat`
+  - Powershell
+    - `venv\Scripts\activate.ps1`
+- Linux
+  - `source venv/bin/activate`
 
 `pip install -r requirements.txt`
 

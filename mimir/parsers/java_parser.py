@@ -3,6 +3,7 @@ from tree_sitter import Node
 from typing import Generator
 
 from mimir.models.class_model import ClassModel
+from mimir.models.code_model import CodeModel
 from mimir.models.method_model import MethodModel
 from mimir.parsers.base_parser import BaseParser
 
@@ -13,28 +14,47 @@ class JavaParser(BaseParser):
         self.project = project
         super().__init__(ts_java.language())
         self.tree = self.parse_file(file_path)
-        self.data = ClassModel("java")
+        self.data = CodeModel("java")
 
-        self.current_method_node: Node = None
-        self.current_method_info: MethodModel = None
+        self.classes = []
 
-        for node in self.traverse_tree():
-            self.process_node(node)
+        try:
+            for node in self.traverse_children(self.tree.root_node):
+                self.process_child(node)
+        except Exception as e:
+            self.project.logger.log_error(f"Error parsing {self.file_path}: {e}")
 
-        # check to add last method
-        need_to_add_last_method_info = True
-        for method in self.data.methods:
-            if method.name == self.current_method_info.name:
-                need_to_add_last_method_info = False
-                break
+        for c in self.classes:
+            self.data.code_classes.append(c)
 
-        if need_to_add_last_method_info and self.current_method_info is not None:
-            self.data.methods.append(self.current_method_info)
-
-        self.project.data[self.file_path] = self.data.to_dict()
+        try:
+            self.project.data[self.file_path] = self.data
+        except Exception as e:
+            self.project.logger.log_error(f"Error saving parsed code data to model {e}")
 
 
-    def traverse_tree(self) -> Generator[Node, None, None]:
+    def traverse_children(self, node)-> Generator[Node, None, None]:
+        try:
+            cursor = node.walk()
+
+            # Skip the root node and go directly to the first child
+            if cursor.goto_first_child():
+                # Yield only immediate children of the root
+                while cursor.node is not None:
+                    yield cursor.node
+                    # Move to the next sibling
+                    if not cursor.goto_next_sibling():
+                        break
+            else:
+                # In case there are no children
+                yield from ()  # Return an empty generator if there are no children
+
+        except Exception as e:
+            self.project.logger.log_info(self.file_path)
+            self.project.logger.log_error(e)
+            self.project.logger.log_error("Could not traverse tree")
+
+    def traverse_whole_tree(self) -> Generator[Node, None, None]:
         try:
             cursor = self.tree.walk()
             visited_children = False
@@ -53,29 +73,71 @@ class JavaParser(BaseParser):
             self.project.logger.log_error("Could not traverse tree")
 
 
-    def process_node(self, node):
+    def process_child(self, node):
         if node.grammar_name == "import_declaration":
             self.process_import_declaration(node)
-        elif "package_declaration" == node.grammar_name:
+        elif node.grammar_name == "package_declaration":
             self.process_package(node)
-        elif node.grammar_name == "modifiers" and node.parent.grammar_name == "class_declaration":
-            self.process_class_modifiers(node)
-        elif node.grammar_name == "identifier" and node.parent.grammar_name == "class_declaration":
-            self.process_class_name(node)
         elif node.grammar_name == "class_declaration":
-            self.process_class_declaration(node)
-        elif node.grammar_name == "field_declaration" and node.parent.parent.grammar_name == "class_declaration":
-            self.process_class_property(node)
-        elif node.grammar_name == "modifiers" and node.parent.grammar_name == "method_declaration":
-            self.process_method_modifiers(node)
-        elif node.grammar_name == "identifier" and node.parent.grammar_name == "method_declaration":
-            self.process_method_name(node)
-        elif "type" in node.grammar_name and node.parent.grammar_name == "method_declaration":
-            self.process_method_modifiers(node)
-        elif node.grammar_name == "method_declaration" or node.grammar_name == "constructor_declaration":
-            self.process_method_declaration(node)
+            self.process_class_node(node)
         else:
             pass
+
+    def process_class_child(self, node, class_model: ClassModel):
+        if node.grammar_name == "class_declaration":
+            self.process_class_node(node)
+        elif node.grammar_name == "modifiers" and node.parent.grammar_name == "class_declaration":
+            self.process_class_modifiers(node, class_model)
+        elif node.grammar_name == "identifier" and node.parent.grammar_name == "class_declaration":
+            self.process_class_name(node, class_model)
+        elif node.grammar_name == "field_declaration" and node.parent.parent.grammar_name == "class_declaration":
+            self.process_class_property(node, class_model)
+        elif node.grammar_name == "method_declaration" or node.grammar_name == "constructor_declaration":
+            self.process_method_node(node, class_model)
+        else:
+            pass
+
+    def process_method_child(self, node, method_model: MethodModel):
+        if node.grammar_name == "modifiers" and node.parent.grammar_name == "method_declaration":
+            self.process_method_modifiers(node, method_model)
+        elif node.grammar_name == "identifier" and node.parent.grammar_name == "method_declaration":
+            self.process_method_name(node, method_model)
+        elif "type" in node.grammar_name and node.parent.grammar_name == "method_declaration":
+            self.process_method_modifiers(node, method_model)
+        else:
+            pass
+
+    def process_class_node(self, node):
+        java_class = ClassModel()
+        start_pos = node.start_point
+        end_pos = node.end_point
+        java_class.start_lin_no = start_pos[0]
+        java_class.start_pos = start_pos[1]
+        java_class.end_lin_no = end_pos[0]
+        java_class.end_pos = end_pos[1]
+
+        self.classes.append(java_class)
+
+        for node in self.traverse_children(node):
+            self.process_class_child(node, java_class)
+            if node.grammar_name == "class_body":
+                body_node = node
+                for node in self.traverse_children(node):
+                    self.process_class_child(node, java_class)
+
+    def process_method_node(self, node, class_model: ClassModel):
+        java_method = MethodModel()
+        class_model.methods.append(java_method)
+
+        java_method.body = node.text.decode(self.encoding)
+        java_method.start_lin_no = node.start_point[0]
+        java_method.start_pos = node.start_point[1]
+        java_method.end_lin_no = node.end_point[0]
+        java_method.end_pos = node.end_point[1]
+
+        for node in self.traverse_children(node):
+            self.process_method_child(node, java_method)
+
 
     def process_import_declaration(self, node):
         file_import = node.text.decode(self.encoding)
@@ -85,59 +147,24 @@ class JavaParser(BaseParser):
         namespace = node.text.decode(self.encoding)
         self.data.namespace = namespace
 
-    def process_class_modifiers(self, node):
+    def process_class_modifiers(self, node, class_model: ClassModel):
         class_modifiers = node.text.decode(self.encoding).split("\n")
         for modifier in class_modifiers:
-            self.data.modifiers.append(modifier)
+            class_model.modifiers.append(modifier)
 
-    def process_class_name(self, node):
+    def process_class_name(self, node, class_model: ClassModel):
         class_name = node.text.decode(self.encoding)
-        self.data.name = class_name
+        class_model.name = class_name
 
-    def process_class_declaration(self, node):
-        start_pos = node.start_point
-        end_pos = node.end_point
-        self.data.start_lin_no = start_pos[0]
-        self.data.start_pos = start_pos[1]
-        self.data.end_lin_no = end_pos[0]
-        self.data.end_pos = end_pos[1]
-
-    def process_class_property(self, node):
+    def process_class_property(self, node, class_model: ClassModel):
         class_property = node.text.decode(self.encoding)
-        self.data.properties.append(class_property)
+        class_model.properties.append(class_property)
 
-    def process_method_modifiers(self, node):
+    def process_method_modifiers(self, node, method_model: MethodModel):
         method_modifiers = node.text.decode(self.encoding).split("\n")
         for modifier in method_modifiers:
-            self.current_method_info.modifiers.append(modifier.strip())
+            method_model.modifiers.append(modifier.strip())
 
-    def process_method_name(self, node):
+    def process_method_name(self, node, method_model: MethodModel):
         method_name = node.text.decode(self.encoding)
-        self.current_method_info.name = method_name
-
-    def process_method_declaration(self, node):
-        body = node.text.decode(self.encoding)
-        start_lin_no = node.start_point[0]
-        start_pos = node.start_point[1]
-        end_lin_no = node.end_point[0]
-        end_pos = node.end_point[1]
-        if self.current_method_node is None:
-            self.current_method_node = Node
-            self.current_method_info = MethodModel()
-            self.current_method_info.body = body
-            self.current_method_info.start_lin_no = start_lin_no
-            self.current_method_info.start_pos = start_pos
-            self.current_method_info.end_lin_no = end_lin_no
-            self.current_method_info.end_pos = end_pos
-        else:
-            if self.current_method_info is not None:
-                self.data.methods.append(self.current_method_info)
-
-            self.current_method_node = Node
-            self.current_method_info = MethodModel()
-            self.current_method_info.body = body
-            self.current_method_info.start_lin_no = start_lin_no
-            self.current_method_info.start_pos = start_pos
-            self.current_method_info.end_lin_no = end_lin_no
-            self.current_method_info.end_pos = end_pos
-
+        method_model.name = method_name

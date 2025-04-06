@@ -17,24 +17,23 @@ class PyDriller:
         # Print the current time in a custom format (e.g., Hour:Minute:Second)
         formatted_time = current_time.strftime("%H:%M:%S")
         print("Formatted time:", formatted_time)
+
         i = 1
         for commit in Repository(self.project.project_temp_dir).traverse_commits():
-            print(i)
-            i = i + 1
-            modified_files = commit.modified_files
-            for modified_file in modified_files:
-                for filename in self.project.data.keys():
-                    name = os.path.basename(filename)
-                    if modified_file.filename.lower() == name.lower():
-                        cm = CommitModel()
-                        cm.commit_hash = commit.hash
-                        cm.commit_author = commit.author.name
-                        cm.commit_author_email = commit.author.email
-                        cm.commit_message = commit.msg
-                        try:
-                            self.project.data[filename]["commits"].append(cm.to_dict())
-                        except Exception as e:
-                            pass
-
-                        print(filename)
-                        break
+            modified_files = [item.filename.lower() for item in commit.modified_files]
+            file_search = set(modified_files)
+            i += 1
+            for filename in self.project.data.keys():
+                name = os.path.basename(filename).lower()
+                if name in file_search:
+                    print(i)
+                    cm = CommitModel()
+                    cm.commit_hash = commit.hash
+                    cm.commit_author = commit.author.name
+                    cm.commit_date = f"{commit.author_date.year}-{commit.author_date.month}-{commit.author_date.day}"
+                    cm.commit_author_email = commit.author.email
+                    cm.commit_message = commit.msg
+                    try:
+                        self.project.data[filename].commits.append(cm)
+                    except Exception as e:
+                        pass
