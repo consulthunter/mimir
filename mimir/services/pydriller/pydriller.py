@@ -16,7 +16,7 @@ class PyDriller:
         current_time = datetime.datetime.now()
         # Print the current time in a custom format (e.g., Hour:Minute:Second)
         formatted_time = current_time.strftime("%H:%M:%S")
-        print("Formatted time:", formatted_time)
+        self.project.logger.log_info(f"Formatted time:{formatted_time}")
 
         i = 1
         for commit in Repository(self.project.project_temp_dir).traverse_commits():
@@ -26,7 +26,6 @@ class PyDriller:
             for filename in self.project.data.keys():
                 name = os.path.basename(filename).lower()
                 if name in file_search:
-                    print(i)
                     cm = CommitModel()
                     cm.commit_hash = commit.hash
                     cm.commit_author = commit.author.name

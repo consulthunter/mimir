@@ -1,7 +1,6 @@
 import json
 import os.path
 import sqlite3
-import aiofiles
 
 
 class Export:
@@ -66,7 +65,7 @@ class Export:
 
         # Path to the SQLite database
         os.makedirs(self.project.project_output_dir, exist_ok=True)
-        db_path = os.path.join(self.project.project_output_dir, "data.db")
+        db_path = os.path.join(self.project.project_output_dir, "code_data.db")
 
         # Connect to SQLite database (it will create it if it doesn't exist)
         connection = sqlite3.connect(db_path)

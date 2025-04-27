@@ -5,17 +5,19 @@ import aiofiles.os
 from pathlib import Path
 
 class CollectInfoProject:
-    def __init__(self, project, configuration, clone, analyze, export):
+    def __init__(self, project, configuration, clone, analyze, extract, export):
         self.project = project
         self.configuration = configuration
         self.clone = clone
         self.analyze = analyze
+        self.extract = extract
         self.export = export
 
     async def run_collect(self):
         await self.clone.run_clone_async()
         await self.find_project_files(os.path.join(os.getcwd(), self.project.project_temp_dir))
         await self.analyze.run_analyze_async()
+        await self.extract.run_extract()
         await self.export.run_export_async()
 
     async def find_project_files(self, root_dir: str):

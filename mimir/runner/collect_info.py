@@ -4,6 +4,7 @@ from mimir.models.collect_info_project import CollectInfoProject
 from mimir.services.project_operations.analyze import Analyze
 from mimir.services.project_operations.clone import Clone
 from mimir.services.project_operations.export import Export
+from mimir.services.project_operations.extract import Extract
 
 
 class CollectInfoRunner:
@@ -29,12 +30,14 @@ class CollectInfoRunner:
             self.logger.log_info(f"Creating collect-info project {project.project_id}.")
             clone = Clone(project)
             analyze = Analyze(project)
+            extract = Extract(project)
             export = Export(project)
             collect_info = CollectInfoProject(
                 project,
                 self.configuration,
                 clone,
                 analyze,
+                extract,
                 export,
             )
             self.tasks.append(self.run_collect_info(collect_info))
