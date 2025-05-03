@@ -10,7 +10,7 @@ class Extract:
     def __init__(self, project):
         self.project = project
         self.model = SentenceTransformer("all-MiniLM-L6-v2")
-        self.chroma_client = chromadb.chromadb.PersistentClient(os.path.join(self.project.project_output_dir, "docs.db"))
+        self.chroma_client = chromadb.chromadb.PersistentClient(os.path.join(self.project.project_output_dir, "docs"))
         self.collection = self.chroma_client.get_or_create_collection("project_docs")
 
     async def run_extract(self):

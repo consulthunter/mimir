@@ -6,9 +6,11 @@ Mimir looks through all the code (currently only Java) files. It extracts inform
 on the code files such as packages, classes, annotations, methods, etc.
 
 After it extracts this information using `tree-sitter` it leverages `PyDriller` to extract
-git information for the code files, iterating over every commit for the project.
+git information for the code files, iterating over every commit for the project. Mimir also extracts
+project documentation putting the documentation in a vector database, `Chroma`.
 
-Finally, Mimir saves this extracted information in a JSON file for future use and analysis.
+Finally, Mimir saves the extracted code data in a SQLite `code_data.db` and the extracted documentation
+in a `docs` folder as `chroma.sqlite3`
 
 ## Installation
 
@@ -37,11 +39,11 @@ Activate the virtual environment and install the requirements:
 
 Create the config:
 
-`python main.py create-config --config config\default-config.json`
+`python run_create_default_config.py`
 
 Run the example:
 
-`python main.py collect-info --config config\default_config.json`
+`python run_collect`
 
-Check the `/output/` directory for the `data.json`
+Check the `/output/` directory for the `code_data.db` and the `docs.db` under the project's name.
 
